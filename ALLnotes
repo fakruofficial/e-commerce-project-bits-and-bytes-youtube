@@ -1,0 +1,430 @@
+series - Bits And Bytes
+
+Video 2 -
+
+Microservices key components -
+
+1)Decomposition - convert monolithic to microservices
+2)API Gateway -
+3)Scaling
+4)Load Balancer
+5)Database
+6)Communication(sync & Async)
+7)Circuit Breaker
+8)Service Discovery
+9)Monitoring
+
+multiple instances honeg eto hum load balance ke through handle kar sakate hai
+
+2)API Gateway -
+
+Client → API Gateway → Microservices
+
+API Gateway
+
+Core Responsibilities
+Request Routing
+Authentication / Authorization
+Rate Limiting
+Circuit Breaker
+5) Path Rewriting
+Centralized Logging
+CORS Handling
+Custom Filters (pre filter / post filter)
+Service Discovery Integration
+load balancing
+
+code -
+
+@Bean
+public RouteLocator routes(RouteLocatorBuilder builder) {
+    return builder.routes()
+        .route("products",
+            r -> r.path("/products/**")
+                  .uri("http://product-service"))
+        .route("delivery",
+            r -> r.path("/delivery/**")
+                  .uri("http://delivery-service"))
+        .build();
+}
+
+
+1) Deploy multiple Gateway instances
+2) enable health checks
+3) Enable auto Scaling - agar CPU ram hai wo 70 % se upper aa gaya hai to new instance create karo
+4) Add monitoring & Alerts -  Gateway ko safe Rakhane ke liye agar gateway fail ho gaya to load balancer handle kar lega baki ke instances ke through alert jayega API gate way down hai meanwhile wo log usape kam kar sakat ehai
+
+
+Problem	Solution
+Single point of failure	        Run multiple gateway instances
+Gateway becomes overloaded	Add rate limiting + auto scalling
+Redis failure affects limiter	Add Redis failover or fallback
+Debugginghard	                Use observability tools
+
+Add rate limiting + auto-scaling -  per second ki                                koi bhi user 10 request se jyada send nahi kar akata nahi to wo application me access hi nahi hoga
+
+spring cloud by defauld redis provide karata hai
+
+
+**********************************************
+
+Rate Limiting - we can do it through code -
+
+
+1) spring cloud redis inyernally use karata hai - jitane request ayenge utana count wo redis me store karata hai
+
+etane request per second me aye to allow karo nahi to exception through karo 429 too many request BE ko safe rakhane ke liye
+
+docker ke trough redis run karate hai
+
+docker desktop pe redis run hoga
+
+in YML file - ipKeyResolver - in which IP we are adding rate limiter
+
+  -             name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: 2  - per second kitana request bhej sakate hai
+                    redis-rate-limiter.burstCapacity: 2 - kitane request bhej sakate hai
+
+
+
+
+
+
+#####################################################################
+
+3)Scaling - Scaling means increasing or decreasing resources(CPU,RAM,instances) to handle more or fewer users.
+
+What if millions of user hit e-commerce website during sale ?
+
+2 types -
+
+vertical scaling  -  4cpu  -Increase the power of a single server.
+
+Before: 4 GB RAM server
+After : 16 GB RAM server
+
+horizontal scaling - Increase number of servers
+
+Simple Difference
+Vertical Scaling	Horizontal Scaling
+Increase server power	Increase number of servers
+Easy to implement	More scalable
+Limited by hardware	Can grow almost infinitely
+Example: Upgrade RAM	Example: Add more servers
+
+Example -
+
+Example Flow
+User sends request → API Gateway
+API Gateway distributes requests to:
+
+4) Load Balancer - A Load Balancer distributes incoming requests among multiple
+and we can create load balancer for multiple different services
+
+servers/services.
+Product Service 1
+Product Service 2
+Product Service 3
+Product Service 4
+
+##########################
+
+where do they store all the services information like product details cart detail payment details and delivery details
+
+** what if load balancer fails (single point of failure fail)
+
+use DNS based load balancing
+
+option 1 -
+
+- AWS route53 or Google cloud or google Cloud DNS
+
+if any load balancer fail it will use another one
+
+
+option 2 -
+
+Active passive load balancer setup
+
+primary load balancer
+secondary load balancer
+
+we can use AWS provide elastic load balancer as well that we can use
+
+1) AWS Route53 2) Google Cloud DNS
+
+Active -Passive load balancer setup
+
+1) Primary Load Balancer (active)
+2) Secondary Load Balancer (standby)
+
+if primary fails a virtual IP switches to secondary using tools like - keepalived, HAProxy with VRRP
+Cloud LB failover policies
+
+5)Database - we can use different databases for every services
+
+
+7) Communication (sync & async)
+
+synchronous -
+
+request will wait to complete previous request - synchronous
+
+when immediate response is needed
+
+here we can use REST API , gRPC
+
+****************************************
+example - as user add a product to cart and places an order each step waits for previous step to finish before moving to next step
+
+Asynchronous - when processing can happen in background
+
+payment and inventory work in parallel
+e.g - delivery tracking status notification
+
+Example - Kafka, RabbitMQ, SQS
+
+KAFKA - example there is payment service an delivery service
+
+kafa ke through we can send message to delilvery service that order paid deliver now
+
+
+##################################################################
+
+7)Circuit Breaker (The Safety switch at home like )
+
+Now if delivery service fails during rush ?
+
+in some sales on particular service per bhohot traffic aya ho to kuch bhi ek servce fail ho jayega -  if delivery service fails or getting more time to respose ese hum bolae hai --       CASCADING FAILURE bolate hai
+
+solution is circuit breaker pattern
+
+the circuit breaker pattern is use to prevent cascading failures when a microservice is slow failing or overloaded instead of waiting indefinitely it stops calls to the faling service and allows it to recover.
+
+- ek services ke wajh se sare services ko slow down hone se bacha sakate hai
+
+*if paymnet service fails multiple times the circuit breaker opens
+
+*new request are rejected immeditly instead waiting
+
+*after some time it tries again (half open state)
+
+*if the service recover normal operation resumes
+
+using  Spring Cloud Hystrix we can design circuit breaker in spring
+
+open , half open , closed
+
+closed - everytingis normal
+open - fail hota hai to circuit open karat hai
+half open - thode der bad aur ek bar try karega agar
+
+it will return fallback response
+
+notes -
+
+Circuit Breaker (Short):
+
+A Circuit Breaker is a fault-tolerance pattern that stops requests to a failed or slow service and returns a fallback response instead.
+
+Benefits:
+
+Prevents cascading failures
+Improves response time during outages
+Allows failed services time to recover
+
+Flow:
+Client → API Gateway → Service
+If Service fails → Circuit Breaker opens → Fallback response returned.
+
+- practically -
+
+1) cloud circuit breaker dependency
+
+2) for testing manually terminate any microservices
+
+2) in api gate way YML -
+
+          - name: CircuitBreaker
+                  args:
+                    name: productServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/product
+
+3) when i tryes to call categories it will fallback to forward:/fallback/product
+ and it will display - Product service is currently unavailable. Please try again later ye message ayega - faild nahi hoga 200 success
+
+
+#############################################################################
+
+8)Service Discovery -
+
+configuration karane ke baad esaka ek dashboard dikhega and sab configuration hone ke baad
+sab services ko registry karan hai in service discovery  -  in
+
+application.properties -
+
+ eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+
+usane baad wo registry ho jayegi product service hi and wo service dashboard pe bhi dikhegi
+
+Payment service could not find delivery service -
+when we scale up scale down IP address will be change in cloud
+
+so that to API get way will not find services
+
+how to avoid this failure ?
+
+Service Discovery -
+
+Each service register itself wih a service registry- e.g - Eureka, Consul, Zookeeper
+
+when a service needs another service it queries the registry for an available instance
+
+AND API gateway dynamically resolves service locations using the registry.(APi gateway ke pass dynamically value(address ) rahegi through service discovery )
+
+together they ensure load balancing scalability and fault tolerance
+
+service discovery is also know as service registry
+
+Flow:
+User sends a request to the API Gateway.
+API Gateway checks Service Discovery (Registry) for available instances of product-service.
+Service Discovery returns:
+10.0.1.12:6000
+10.0.1.13:6000
+10.0.1.14:6000
+The Load Balancer (LB) chooses one of these instances.
+Request is forwarded to the selected Product Service instance.
+
+Why Load Balancer?
+Distributes traffic across multiple service instances.
+Prevents one server from getting overloaded.
+Improves performance and availability.
+If one instance goes down, traffic is routed to healthy instances.
+Example
+
+If 3 requests arrive:
+
+Request 1 → 10.0.1.12:6000
+Request 2 → 10.0.1.13:6000
+Request 3 → 10.0.1.14:6000
+
+This is called Round Robin Load Balancing.
+
+Without Service Discovery: Services must hardcode each other's IP addresses and ports, making the system difficult to scale, maintain, and update.
+
+
+How Service Discovery Works (Short)
+Registration – Services register themselves with a Discovery Server (e.g., Eureka).
+Discovery – Services query the Discovery Server to find the location (IP/port) of other services.
+Load Balancing – Requests are distributed among available service instances using a Load Balancer.
+
+Example:
+Product Service starts → registers with Eureka → API Gateway asks Eureka for Product Service instances → Load Balancer selects one instance → request is sent.
+
+popular discovery tools - 1) Eureka 2) Consul 3) Zookeeper
+
+**************
+
+How does Eureka determine service availability? (Short)
+
+Heartbeat (Lease Renewal): Each service sends a heartbeat to Eureka every 30 seconds (default).
+Lease Expiration: If Eureka doesn't receive a heartbeat for 90 seconds (default), it marks the service as DOWN or removes it (if self-preservation is disabled).
+
+Default Configuration:
+
+eureka:
+  instance: in each services - properties
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+
+Self-Preservation Mode in Eureka (Short)
+
+A safety feature that prevents Eureka from removing services during temporary network issues.
+If many heartbeats are missed, Eureka assumes a network problem instead of service failures.
+This helps avoid mass deregistration of healthy services.
+
+Default Configuration:
+
+eureka:
+  server:
+    enable-self-preservation: true
+    renewal-percent-threshold: 0.85
+    eviction-interval-timer-in-ms: 60000
+
+
+What is a Lease in Eureka? (Short)
+
+A lease is an agreement between a service and the Eureka server that determines how long the service is considered alive.
+The service renews the lease by sending a heartbeat every 30 seconds (default).
+If no heartbeat is received within 90 seconds (default), Eureka removes the service from the registry.
+
+Default Configuration:
+
+eureka:
+  instance:
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+
+############################################################################
+
+9)Monitoring -
+
+chekc our application health we can trace logs and other activity
+
+spring boot actuator - health
+Promethus + Grafana for MEtrics
+Zipkintraces : payment Delivery took 3 seconds
+
+
+#########################################################
+
+
+5) - Path Rewriting (Theory and practically implementation)
+
+route ko transformkarane ke liye hum path reqriting use karate hai
+
+              predicates:
+                - Path=/api/v1/products/**, /api/v1/categories/**
+              filters:
+                - RewritePath=/api/v1/(?<segment>.*), /${segment}
+
+##################################################################################################################################
+
+
+## Kafka tutorial -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
