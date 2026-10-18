@@ -16,3 +16,14 @@ public class RedisConfig {
         };
     }
 }
+
+
+
+
+
+//
+//
+//The flow is:
+//        1. First request: Redis doesn't have the product, so Spring Boot fetches it from the database and saves a copy in Redis.
+//        2. Second request: Redis already has the product, so Spring Boot returns it without querying the database.
+//3. More requests: Spring Boot can keep returning the cached copy until it expires or gets updated.

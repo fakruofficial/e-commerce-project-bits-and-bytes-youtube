@@ -4,25 +4,31 @@ spring:
       server:
         webflux:
           discovery:
-            locator:
-              lower-case-service-id: true
-              enabled: true
+             locator:
+             lower-case-service-id: true
+             enabled: true
           routes:
             - id: product-service-route
-              uri: lb://product-service
+              uri: lb://product-service    # http://localhost:8080 now we already have port in service discovery so it will pick from there
               predicates:
-                - Path=/api/v1/products/**, /api/v1/categories/**
+                - Path=/api/v1/products/**,/api/v1/categories/**
+                # Without path rewriting:
+                # - Path=/products/**,/categories/**
               filters:
                 - RewritePath=/api/v1/(?<segment>.*), /${segment}
                 - name: RequestRateLimiter
                   args:
                     key-resolver: "#{@ipKeyResolver}"
+                    # IP-based rate limiting: requests from the same IP share the limit
                     redis-rate-limiter.replenishRate: 2
+                    # How many tokens are replenished per second
                     redis-rate-limiter.burstCapacity: 2
-                - name: CircuitBreaker
-                  args:
-                    name: productServiceCircuitBreaker
-                    fallbackUri: forward:/fallback/product
+                    # Maximum burst capacity
+
+#                - name: CircuitBreaker
+#                  args:
+#                    name: productServiceCircuitBreaker
+#                    fallbackUri: forward:/fallback/product
 
             - id: order-service-route
               uri: http://localhost:6001
@@ -30,6 +36,8 @@ spring:
                 - Path=/api/v1/orders/**
               filters:
                 - RewritePath=/api/v1/(?<segment>.*), /${segment}
+                # Without path rewriting:
+                # - Path=/orders/**
 
             - id: payment-service-route
               uri: http://localhost:6002
@@ -42,3 +50,46 @@ eureka:
   client:
     service-url:
         defaultZone: http://localhost:8761/eureka/
+
+
+
+#spring:
+#  cloud:
+#    gateway:
+#      server:
+#        webflux:
+#          discovery:
+#            locator:
+#              lower-case-service-id: true
+#              enabled: true
+#          routes:
+#            - id: product-service-route
+#              uri: lb://product-service
+#              predicates:
+#                - Path=/api/v1/products/**, /api/v1/categories/**
+#              filters:
+#                - RewritePath=/api/v1/(?<segment>.*), /${segment}
+#                - name: RequestRateLimiter
+#                  args:
+#                    key-resolver: "#{@ipKeyResolver}"
+#                    redis-rate-limiter.replenishRate: 2
+#                    redis-rate-limiter.burstCapacity: 2
+#                - name: CircuitBreaker
+#                  args:
+#                    name: productServiceCircuitBreaker
+#                    fallbackUri: forward:/fallback/product
+#
+#            - id: order-service-route
+#              uri: http://localhost:6001
+#              predicates:
+#                - Path=/api/v1/orders/**
+#              filters:
+#                - RewritePath=/api/v1/(?<segment>.*), /${segment}
+#
+#            - id: payment-service-route
+#              uri: http://localhost:6002
+#              predicates:
+#                - Path=/api/v1/payments/**
+#              filters:
+#                - RewritePath=/api/v1/(?<segment>.*), /${segment}
+#

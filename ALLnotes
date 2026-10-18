@@ -87,7 +87,9 @@ in YML file - ipKeyResolver - in which IP we are adding rate limiter
                     redis-rate-limiter.replenishRate: 2  - per second kitana request bhej sakate hai
                     redis-rate-limiter.burstCapacity: 2 - kitane request bhej sakate hai
 
+burstCapacity: 2 → Wallet mein maximum 2 tokens rakh sakte ho.
 
+replenishRate: 2 → Wallet mein har second 2 tokens refill hote hain, jab tak capacity 2 na ho jaye.
 
 
 

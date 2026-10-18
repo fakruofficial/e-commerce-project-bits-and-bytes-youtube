@@ -10,8 +10,25 @@ import org.springframework.web.client.RestTemplate;
 public class RestTemplateConfig {
 
     @Bean
-    @LoadBalanced
+    @LoadBalanced   // @LoadBalanced is used when you want Spring to call another microservice by its service name, instead of using localhost:port. - "http://product-service/products/
     public RestTemplate restTemplate(RestTemplateBuilder builder ) {
         return builder.build();
     }
 }
+
+//
+//@LoadBalanced lets you call a service by its name instead of localhost:port.
+//
+//        Example:
+//
+//@LoadBalanced
+//RestTemplate restTemplate;
+//
+//Then:
+//
+//        restTemplate.getForObject(
+//    "http://product-service/products/1",
+//    Product.class
+//);
+//
+//Here, product-service is the service name, and LoadBalancer finds the available Product Service instance.

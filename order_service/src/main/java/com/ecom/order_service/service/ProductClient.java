@@ -15,7 +15,8 @@ public class ProductClient {
     }
 
     public ProductResponseDTO getProductName(String productId) {
-        String url = "http://product-service/products/" + productId;
+       // String url = "http://localhost:8080/products/" + productId;
+      String url = "http://product-service/products/" + productId;
         return restTemplate.getForObject(url, ProductResponseDTO.class);
     }
 

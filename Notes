@@ -1,0 +1,226 @@
+E-commerce APIs — Postman Sequence
+1. Create Category
+
+POST http://localhost:8080/categories
+
+Body → raw → JSON
+
+{
+  "categoryName": "Electronics",
+  "description": "Electronic products"
+}
+2. Get All Categories
+
+GET http://localhost:8080/categories
+
+Parameters: None.
+
+3. Create Product
+
+POST http://localhost:8081/products
+
+{
+  "name": "Samsung Mobile",
+  "description": "Android smartphone",
+  "price": 25000,
+  "stockQuantity": 10,
+  "categoryId": 1
+}
+4. Get All Products
+
+GET http://localhost:8081/products
+
+Parameters: None.
+
+5. Get Product by ID
+
+GET http://localhost:8081/products/PROD001
+
+Path parameter: productId = PROD001
+
+6. Create Order
+
+POST http://localhost:8082/orders
+
+{
+  "productId": "PROD001",
+  "quantity": 2
+}
+7. Get Order Details
+
+GET http://localhost:8082/orders/ORDER001
+
+Path parameter: orderId = ORDER001
+
+8. Process Payment
+
+POST http://localhost:6002/payments
+
+{
+  "orderId": "ord-51296d27",
+  "customerId": "cust-00001",
+  "amount": 200.0
+}
+9. Verify Order Status
+
+GET http://localhost:8082/orders/ORDER001
+
+Parameters: Use the actual order ID returned by the Create Order API.
+
+Flow: Category → Product → Order → Payment → Verify Status.
+
+##############################################################################
+
+using API gateway we can access APIS from one single port like - http://localhost:5000/products  using 5000
+
+
+// redis implemention
+
+API Gateway
+Rate Limiting
+1. Use Redis for Rate Limiting
+(for every request, the Gateway checks Redis — 'Has this user crossed the limit?' If yes, it blocks the request. Otherwise, it lets it through)
+2. Start Redis via docker - docker run -d -p 6379:6379 redis
+3. Add Required Dependencies
+
+
+why we are using redis -
+
+
+The flow is:
+1. First request: Redis doesn't have the product, so Spring Boot fetches it from the database and saves a copy in Redis.
+2. Second request: Redis already has the product, so Spring Boot returns it without querying the database.
+3. More requests: Spring Boot can keep returning the cached copy until it expires or gets updated.
+
+For example, Redis might store:
+Key: rate_limit:user101
+Value: 5
+Expiry: 60 seconds
+
+
+Each request increments the counter. Redis is fast at this because it stores data in memory.
+
+git bash command - for i in {1..10}; do curl -X GET "http://localhost:6001/orders/ord-50b0423a"; done
+
+used git bash command to send multiple request at a time because postman se nahi hoga -
+
+First 5 requests → Allowed ✅
+
+6th request → Rejected with HTTP 429 Too Many Requests ❌
+
+After the limit resets → Requests are allowed again.
+
+
+#############################################################################################################################
+
+Circuit breaker practical -
+
+spring-cloud-starter-circuitbreaker-reactor-resilience4j  - dependency
+
+add code in yml -
+
+       - name: CircuitBreaker
+         args:
+            name: productServiceCircuitBreaker
+            fallbackUri: forward:/fallback/product
+
+then manually disabled product service and run end point what is related to product - http://localhost:5000/categories
+it will call the fallback url and displaye message there 'Product service is currently unavailable. Please try again later.'
+
+
+################################################################################################################################
+
+
+Path rewritting :  we can change path of the route
+
+              predicates:
+                - Path=/api/v1/orders/**
+              filters:
+                - RewritePath=/api/v1/(?<segment>.*), /${segment}
+
+http://localhost:5000/api/v1/categories
+
+################################################################################################################################
+
+service discovery practically  :
+
+add dependencies - Eureka Server ,
+
+@EnableEurekaServer
+
+add configutaion in appication.properties
+
+run application you will get dashboard on http://localhost:8761/
+
+abhi sab service ko regiister karana hai discovery service me ok
+
+step 1 -     add dependency -  Eureka Client
+step 2 -     register karana padega in application.proeprties file me - eureka.client.service-url.defaultZone=http://localhost:8761/eureka/ autmaticall product service register hoga discovery service me - product service dash board pe dikhegi
+step 3 - now it will dispaly localhost 8080 but hame api gateway ke through call karana hai to hame API gateway ko bhi delivary service me register karana padega using yml file me add karo same
+         eureka:
+           client:
+             service-url:
+                 defaultZone: http://localhost:8761/eureka/
+
+step 4 : discovery pe pass abhi port hai to hame in YML   uri: http://localhost:8080   to uri: lb://product-service tabb wo LB service discovery se uthayega because port is already available there - usake multiple instances honge but name same hi rahega product service
+
+step 5 : same other services ke liye bhi karo
+
+ URL -  localhost:5000/api/v1/orders
+
+     json -
+
+     {
+       "customerId": "cust-00002",
+       "items": [
+         {
+           "productId": "prod-00001",
+           "quantity": 2
+         }
+       ]
+     }
+
+service discovery ko kaise pata chalata hai ki service available hai kya nahi -
+
+Interview point: Eureka primarily uses heartbeats to detect availability.
+It does not automatically check an application's actual health endpoint unless additional health-check integration is configured.
+
+Lease renewal (Heartbeat)
+
+
+Eureka determines service health through Lease Renewals (Heartbeats).
+• Heartbeat interval: Each service instance sends a signal every 30 seconds by default.
+• Expiration deadline: If Eureka receives no heartbeat for 90 seconds, it assumes the instance is dead.
+• Action taken: Eureka marks the service as DOWN or removes it from the registry (unless self-preservation is active).
+
+eureka:
+  instance:
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+step 1 - add this in discovery properties file -
+
+ eureka.server.eviction-interval-timer-in-ms=60000  it will check every 6 sec its the instance is active or not- in discovery server
+
+    eureka.instance.lease-renewal-interval-in-seconds=30  - every 30 sec eo beat bhejata jayega   other services
+    eureka.instance.lease-expiration-duration-in-seconds=90  -  90 sec agar down ho gaya to servce discovery wo lega nahi remove kar dega
+
+    #  90 sec tak service discover heart beat nahi mila to wo service discovery portal se remove ho jayegi agar if
+      # self preservation is off
+
+#####################################################
+
+what is mean by self preservation mode in Eureka ?
+
+Self-Preservation mode in Eureka is a safety mechanism that protects the system from mass deregistration during temporary network issues.
+• How it works: If many services suddenly fail to send heartbeats, Eureka assumes a network partition rather than actual service failures and avoids removing them from the registry.
+• Configuration:yaml
+eureka:
+  server:
+    enable-self-preservation: true
+    renewal-percent-threshold: 0.85 # 85% of expected heartbeats required
+    eviction-interval-timer-in-ms: 60000 # Check every 60 sec to evict expired leas
+
+
+    agar 100 me se 5 to 10 percent faild ho rage hai service to wo self preservation mode false hoga and wo services rwmove ho jayege
+    but agar 30 to 40 prrcet hoga as per provided thershold to samaj jayega there might be netwoerk issue so it will set self preservation mode true
